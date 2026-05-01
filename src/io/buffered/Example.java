@@ -17,10 +17,9 @@ public class Example {
     public static void main(String[] args) throws Exception {
 
         ExecutorService es = Executors.newFixedThreadPool(10);
-        FileOutputStream fos = new FileOutputStream(FILE_NAME, true);
-        BufferedOutputStream bos = new BufferedOutputStream(fos, BufferedConst.BUFFER_SIZE);
-        FileInputStream fis = new FileInputStream(FILE_NAME);
-        BufferedInputStream bis = new BufferedInputStream(fis);
+
+        BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(FILE_NAME, false), BufferedConst.BUFFER_SIZE);
+        BufferedInputStream bis = new BufferedInputStream(new FileInputStream(FILE_NAME));
 
         List<Callable> list = new ArrayList<>();
         List<Future<Boolean>> fList = new ArrayList<>();
@@ -37,12 +36,12 @@ public class Example {
         for (Future<Boolean> booleanFuture : fList) {
             booleanFuture.get();
         }
+        bos.close();
 
         byte[] bytes = bis.readAllBytes();
         System.out.println(bytes.length);
         System.out.println(Arrays.toString(bytes));
 
-        bos.close();
         bis.close();
         es.close();
     }
@@ -51,25 +50,21 @@ public class Example {
 
         private final int key;
         private final OutputStream os;
-        private byte[] bytes;
+        private final byte[] bytes = new byte[10];
 
         public MyThread(int key, OutputStream os) throws FileNotFoundException {
             this.key = key;
-//            this.os = new BufferedOutputStream(new FileOutputStream(FILE_NAME));
-//            this.os = new FileOutputStream(FILE_NAME);
             this.os = os;
-            this.bytes = new byte[10];
         }
 
         @Override
         public Boolean call() throws Exception {
+            Thread.currentThread().sleep(100);
             for (int i = 0; i < 10; i++) {
-                bytes[i] = (byte) this.key;
+                Arrays.fill(bytes, (byte) this.key);
+                os.write(bytes);
             }
 
-            System.out.println(Arrays.toString(bytes));
-
-            os.write(bytes);
             return null;
         }
     }

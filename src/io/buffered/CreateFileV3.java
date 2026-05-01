@@ -1,8 +1,7 @@
 package io.buffered;
 
-import java.io.BufferedOutputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
+import java.util.Arrays;
 
 import static io.buffered.BufferedConst.*;
 
@@ -20,6 +19,10 @@ public class CreateFileV3 {
         bos.close();
 
         long endMs = System.currentTimeMillis();
+
+        BufferedInputStream bis = new BufferedInputStream(new FileInputStream(FILE_NAME));
+        byte[] bytes = bis.readAllBytes();
+        bis.close();
 
         System.out.println("File created: " + FILE_NAME);
         System.out.println("File size: " + FILE_SIZE / 1024 / 1024 + "MB");

@@ -1,55 +1,80 @@
 package network.example;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.Socket;
-import java.util.Set;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static util.MyLogger.log;
 
 public class SessionManager {
 
-    private final ConcurrentHashMap<String, Socket> sessionHolder = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Session> sessionHolder = new ConcurrentHashMap<>();
 
-    public void broadcast(String message) {
-        sessionHolder.values().iterator().forEachRemaining((Socket v) -> {
-            try {
-                DataOutputStream output = new DataOutputStream(v.getOutputStream());
-                output.writeUTF(message);
-            }
-            catch (IOException e) {
-                e.printStackTrace();
-            }
+    public void broadcast(Message message) {
+        sessionHolder.values().iterator().forEachRemaining((Session s) -> {
+            this.sendMessage(s, message);
         });
     }
 
-    public boolean add(String key, Socket socket) {
-        Socket saved = sessionHolder.putIfAbsent(key, socket);
-        return socket.equals(saved);
+    public void broadcast(Message message, List<String> blackList) {
+        sessionHolder.forEach((k, v) -> {
+            if (!blackList.contains(k)) this.sendMessage(v, message);
+        });
+    }
+
+    public boolean add(String key, Session session) {
+        Session saved = sessionHolder.putIfAbsent(key, session);
+
+        return saved == null;
     }
 
     public void remove(String key) {
         sessionHolder.remove(key);
     }
 
-    public void change(String newKey, String oldKey, Socket socket) {
-        boolean save = this.add(newKey, socket);
-        if (save) sessionHolder.remove(oldKey);
+    public void updateSession(String key, Session session) {
+        sessionHolder.replace(key, session);
     }
 
-    public void sendMessage(Socket socket, String message) {
-
+    public void sendMessage(Session session, Message message) {
+        try {
+            Socket socket = session.getSocket();
+            ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
+            output.writeObject(message);
+            log("send = " + message);
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public String getMessage(Socket socket) throws IOException {
-        InputStream input = socket.getInputStream();
-        DataInputStream dis = new DataInputStream(input);
-
-        return dis.readUTF();
+    public Message getMessage(Socket socket) {
+        try {
+            InputStream input = socket.getInputStream();
+            ObjectInputStream ois = new ObjectInputStream(input);
+            return (Message) ois.readObject();
+        }
+        catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public Set<String> getMemberList() {
-        return sessionHolder.keySet();
+    public List<String> getMemberList() {
+        return sessionHolder
+                .values()
+                .stream()
+                .map(session -> session.getName()).toList();
+    }
+
+    public synchronized void close() {
+        sessionHolder.values().iterator().forEachRemaining(session -> {
+            try {
+                session.getSocket().close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        sessionHolder.clear();
     }
 }

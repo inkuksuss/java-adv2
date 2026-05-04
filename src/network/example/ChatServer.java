@@ -1,10 +1,10 @@
 package network.example;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+
+import static util.MyLogger.log;
 
 public class ChatServer {
 
@@ -12,24 +12,38 @@ public class ChatServer {
 
     public static void main(String[] args) throws IOException {
         ServerSocket serverSocket = new ServerSocket(PORT);
-        serverSocket.setSoTimeout(3000);
-
         ChatManager chatManager = new ChatManager(new SessionManager());
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(new ShutdownHook(serverSocket, chatManager)));
 
         while (true) {
-            // join
+            //join
             Socket socket = serverSocket.accept();
-
-            chatManager.join(socket);
-
+            log("socket connect: " + socket);
             chatManager.receive(socket);
         }
 
     }
 
-    // join
-    // sendMessage
-    // changeName
-    // getUserList
-    // close
+    static class ShutdownHook implements Runnable {
+
+        private final ServerSocket serverSocket;
+        private final ChatManager chatManager;
+
+        public ShutdownHook(ServerSocket serverSocket, ChatManager chatManager) {
+            this.serverSocket = serverSocket;
+            this.chatManager = chatManager;
+        }
+
+        @Override
+        public void run() {
+            log("call shut down");
+            try {
+                chatManager.close();
+                serverSocket.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
 }

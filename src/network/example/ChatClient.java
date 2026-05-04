@@ -3,45 +3,60 @@ package network.example;
 import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+
+import static util.MyLogger.log;
 
 public class ChatClient {
 
     private static final int PORT = 12345;
+    private final static String JOIN = "join";
+    private final static String MESSAGE = "message";
+    private final static String CHANGE_NAME = "changeName";
+    private final static String MEMBER_LIST = "memberList";
+    private final static String EXIT = "exit";
 
     public static void main(String[] args) throws IOException {
         Socket socket = null;
+        ObjectInputStream ois = null;
+        ObjectOutputStream oos = null;
+        ExecutorService es = Executors.newFixedThreadPool(2);
+
         try {
             socket = new Socket("localhost", PORT);
-            socket.setSoTimeout(3000);
-
-            DataInputStream dis = new DataInputStream(socket.getInputStream());
-            DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-
+            log("socket connect: " + socket);
+            es.submit(new WriteHandler(socket));
             Scanner scanner = new Scanner(System.in);
+            boolean saveName = false;
 
-            while (true) {
+            do {
                 System.out.print("이름을 입력해주세요: ");
                 String name = scanner.nextLine();
-                dos.writeUTF(name);
 
-                String response = dis.readUTF();
+                Message message = new Message();
+                message.setType(JOIN);
+                message.setMessage(name);
+                log("create msg = " + message);
+                oos = new ObjectOutputStream(socket.getOutputStream());
+                oos.writeObject(message);
+                ois = new ObjectInputStream(socket.getInputStream());
 
-                if (name.equals(response)) {
-                    System.out.printf("[%s] 닉네임이 저장되었습니다.", response);
-                    break;
+                Message response = (Message) ois.readObject();
+                log("resp = " + response.toString());
+                if (response.getId() != null) {
+                    System.out.printf("닉네임이 저장되었습니다.");
+                    saveName = true;
                 }
-            }
+                ois.close();
+            } while (!saveName);
 
-            ExecutorService es = Executors.newFixedThreadPool(2);
             es.submit(new ReadHandler(socket));
-            es.submit(new WriteHandler(socket));
-        } catch (IOException e) {
+        } catch (IOException | ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
         finally {
+            ois.close();
+            oos.close();
             socket.close();
         }
     }
@@ -55,23 +70,66 @@ public class ChatClient {
         }
 
         @Override
-        public Void call() throws Exception {
+        public Void call() throws IOException {
             Scanner scanner = new Scanner(System.in);
-            DataOutputStream output;
+            boolean saveName = false;
+
+            do {
+                System.out.print("이름을 입력해주세요: ");
+                String name = scanner.nextLine();
+
+                Message message = new Message();
+                message.setType(JOIN);
+                message.setMessage(name);
+                log("create msg = " + message);
+//                oos = new ObjectOutputStream(socket.getOutputStream());
+//                oos.writeObject(message);
+//                ois = new ObjectInputStream(socket.getInputStream());
+//
+//                Message response = (Message) ois.readObject();
+//                log("resp = " + response.toString());
+//                if (response.getId() != null) {
+//                    System.out.printf("닉네임이 저장되었습니다.");
+//                    saveName = true;
+//                }
+//                ois.close();
+            } while (!saveName);
 
             while (true) {
                 String input = scanner.nextLine();
+                ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
+
+                Message message = new Message();
+
+                if (input.startsWith("/exit")) {
+                    message.setType(EXIT);
+                    message.setMessage(input.replace("/exit", ""));
+                }
+                else if (input.startsWith("/change")) {
+                    message.setType(CHANGE_NAME);
+                    message.setMessage(input.replace("/change", ""));
+                }
+                else if (input.startsWith("/users")) {
+                    message.setType(MEMBER_LIST);
+                }
+                else {
+                    message.setType(MESSAGE);
+                    message.setMessage(input.replace("/message ", ""));
+                }
+
                 try {
-                    output = new DataOutputStream(socket.getOutputStream());
-                    output.writeUTF(input);
-                    if ("exit".equals(input)) break;
+                    oos.writeObject(message);
+                    if (message.getType().equals(EXIT)) break;
                 }
                 catch (IOException e) {
                     throw new RuntimeException(e);
                 }
+                finally {
+                    oos.close();
+                }
             }
-            output.close();
             scanner.close();
+
             return null;
         }
     }
@@ -86,27 +144,19 @@ public class ChatClient {
 
         @Override
         public Void call() throws Exception {
-            DataInputStream input = null;
-
+            ObjectInputStream ois = null;
             try {
-                input = new DataInputStream(socket.getInputStream());
-
                 while (true) {
-                    String read = input.readUTF();
-
-                    if (read.startsWith("/join")) {
-                        System.out.printf("[입장] %s님이 입장하셨습니다.", read.replace("/join ", ""));
-                    }
-                    else if (read.startsWith("/message")) {
-                        System.out.printf("[메세지] %s", read.replace("/message ", ""));
-                    }
+                    ois = new ObjectInputStream(socket.getInputStream());
+                    Message message = (Message) ois.readObject();
+                    System.out.println(message.getMessage());
                 }
             }
             catch (IOException e) {
                 throw new RuntimeException(e);
             }
             finally {
-                input.close();
+                ois.close();
             }
         }
     }

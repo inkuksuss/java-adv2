@@ -3,16 +3,23 @@ package network.example;
 import java.net.Socket;
 import java.util.Objects;
 
-public class Member {
+public class Session {
+
     private String name;
+
     private Socket socket;
 
-    public Member(String name) {
+    public Session(String name, Socket socket) {
         this.name = name;
+        this.socket = socket;
     }
 
     public String getName() {
         return name;
+    }
+
+    public Socket getSocket() {
+        return socket;
     }
 
     public void setName(String name) {
@@ -22,8 +29,8 @@ public class Member {
     @Override
     public boolean equals(Object object) {
         if (object == null || getClass() != object.getClass()) return false;
-        Member member = (Member) object;
-        return Objects.equals(name, member.name);
+        Session session = (Session) object;
+        return Objects.equals(name, session.name);
     }
 
     @Override

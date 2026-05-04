@@ -1,9 +1,18 @@
 package network.example;
 
-import java.io.IOException;
 import java.net.Socket;
+import java.util.List;
+import java.util.UUID;
+
+import static util.MyLogger.log;
 
 public class ChatManager {
+
+    private final static String JOIN = "join";
+    private final static String MESSAGE = "message";
+    private final static String CHANGE_NAME = "changeName";
+    private final static String MEMBER_LIST = "memberList";
+    private final static String EXIT = "exit";
 
     private final SessionManager sessionManager;
 
@@ -11,51 +20,88 @@ public class ChatManager {
         this.sessionManager = sessionManager;
     }
 
-    public void join(Socket socket) {
+    public void join(Socket socket, Message message) {
         try {
-            String name = sessionManager.getMessage(socket);
+            String key = UUID.randomUUID().toString().substring(0, 8);
+            String newName = message.getMessage();
+            Session session = new Session(newName, socket);
+            boolean saved = sessionManager.add(key, session);
+            System.out.println(saved);
 
-            boolean saved = sessionManager.add(name, socket);
             if (!saved) {
-                sessionManager.sendMessage(socket, "");
+                log("login failed: " + message);
+                Message failedMessage = new Message();
+                failedMessage.setId(null);
+                sessionManager.sendMessage(session, failedMessage);
+
                 return;
             }
 
-            sessionManager.broadcast("/join " + name);
+            Message res = new Message();
+            res.setId(key);
+            res.setType("join");
+            res.setMessage(newName + "님이 입장하셨습니다.");
+            sessionManager.broadcast(res);
         }
-        catch (IOException e) {
-            throw new RuntimeException(e);
+        catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
     public void receive(Socket socket) {
         try {
             while (true) {
-                String message = sessionManager.getMessage(socket);
+                Message message = sessionManager.getMessage(socket);
+                log("Receive: " + message.toString());
 
-                if (message.startsWith("/exit")) this.exit(socket);
-                else if (message.startsWith("/change")) this.changeName(socket, message);
-                else if (message.startsWith("/users")) this.sendMemberList();
-                else this.sendMessage(socket, message);
+                if (EXIT.equals(message.getType())) {
+                    this.exit(message);
+                }
+                else if (JOIN.equals(message.getType())) {
+                    this.join(socket, message);
+                }
+                else if (CHANGE_NAME.equals(message.getType())) {
+                    this.changeName(socket, message);
+                }
+                else if (MEMBER_LIST.equals(message.getType())) {
+                    this.sendMemberList();
+                }
+                else {
+                    this.sendMessage(message);
+                }
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    private void sendMessage(Socket socket, String message) {
-        sessionManager.broadcast(message);
+    private void sendMessage(Message message) {
+        Message rsp = new Message();
+        rsp.setType(message.getType());
+        rsp.setMessage(message.getMessage());
+
+        sessionManager.broadcast(rsp);
     }
 
-    private void changeName(Socket socket, String message) {
-        sessionManager.change(message.split("|")[0], message.split("|")[1], socket);
+    private void changeName(Socket socket, Message message) {
+        Session session = new Session(message.getMessage(), socket);
+        sessionManager.updateSession(message.getId(), session);
     }
 
     private void sendMemberList() {
         sessionManager.getMemberList();
     }
 
-    private void exit(Socket socket) {
-//        sessionManager.remove(socket);
+    private void exit(Message message) {
+        sessionManager.remove(message.getId());
+
+        Message rsp = new Message();
+        rsp.setType(EXIT);
+        rsp.setMessage(message.getMessage() + "님이 퇴장하셨습니다.");
+        sessionManager.broadcast(rsp, List.of(message.getId()));
+    }
+
+    public void close() {
+        sessionManager.close();
     }
 }

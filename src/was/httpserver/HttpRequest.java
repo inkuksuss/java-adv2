@@ -18,6 +18,7 @@ public class HttpRequest {
     public HttpRequest(BufferedReader reader) throws IOException {
         parseRequestLine(reader);
         parseHeaders(reader);
+        parseBody(reader);
     }
 
     private void parseRequestLine(BufferedReader reader) throws IOException {
@@ -53,6 +54,21 @@ public class HttpRequest {
         while (!(line = reader.readLine()).isEmpty()) {
             String[] headerParts = line.split(":");
             headers.put(headerParts[0].trim(), headerParts[1].trim());
+        }
+    }
+
+    private void parseBody(BufferedReader reader) throws IOException {
+        if (!headers.containsKey("Content-Length")) return;
+        int contentLength = Integer.parseInt(headers.get("Content-Length"));
+        char[] chars = new char[contentLength];
+        int read = reader.read(chars);
+        if (read != contentLength) {
+            throw new IOException("Failed to read entire body length = " + contentLength);
+        }
+        String body = new String(chars);
+        String contentType = headers.get("Content-Type");
+        if ("application/x-www-form-urlencoded".equals(contentType)) {
+            parseQueryParams(body);
         }
     }
 

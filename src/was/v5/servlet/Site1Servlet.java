@@ -4,7 +4,6 @@ import was.httpserver.HttpRequest;
 import was.httpserver.HttpResponse;
 import was.httpserver.HttpServlet;
 
-import java.io.IOException;
 
 public class Site1Servlet implements HttpServlet {
     public Site1Servlet() {
